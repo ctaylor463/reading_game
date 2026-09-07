@@ -222,7 +222,7 @@ const PIC_EMOJI=Object.fromEntries(PICS);
 <script>
 // ---------- State ----------
 const KEY='cat-hat-map-v1';
-const DEFAULT={v:1, level:0, settings:{voice:'',rate:0.85}, miss:{}, sessions:[], todayKey:'', today:{rounds:0,ms:0,done:false}};
+const DEFAULT={v:1, level:0, settings:{voice:'',rate:0.85,limit:false}, miss:{}, sessions:[], todayKey:'', today:{rounds:0,ms:0,done:false}};
 let S=load();
 function load(){ try{ const raw=localStorage.getItem(KEY); if(raw){ const o=JSON.parse(raw); return Object.assign({},DEFAULT,o,{settings:Object.assign({},DEFAULT.settings,o.settings||{})}); } }catch(e){} return JSON.parse(JSON.stringify(DEFAULT)); }
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
@@ -304,12 +304,12 @@ const ACTS=[
   {id:'build', label:'Build the word', glyph:'<span>🗺️</span><span class="arrow">&#8594;</span><span class="w" style="letter-spacing:.25em">m a p</span>'}
 ];
 function renderHome(){
-  rollDay(); const done=S.today.done;
+  rollDay(); const done=!!S.settings.limit&&S.today.done;
   $('levels').innerHTML=[0,1,2].map(i=>`<button class="lvl ${(S.level||0)===i?'on':''}" data-lv="${i}" aria-label="${LV_NAMES[i]}"><span class="kites">${icon('kite').repeat(i+1)}</span><span class="lab">${LV_NAMES[i]}</span></button>`).join('');
   document.querySelectorAll('.lvl').forEach(b=>b.addEventListener('click',()=>{ S.level=+b.dataset.lv; save(); renderHome(); }));
   $('tiles').innerHTML=ACTS.map(a=>`<button class="tile ${done?'locked':''}" data-act="${a.id}" aria-label="${a.label}"><span class="glyph">${a.glyph}</span><span class="label">${a.label}</span></button>`).join('');
   $('home-note').textContent=done?'Reading time is finished for today.':(S.today.rounds?`${S.today.rounds} round${S.today.rounds>1?'s':''} today`:'');
-  document.querySelectorAll('.tile').forEach(t=>t.addEventListener('click',()=>{ if(S.today.done){ show('s-alldone'); return; } start(t.dataset.act); }));
+  document.querySelectorAll('.tile').forEach(t=>t.addEventListener('click',()=>{ if(S.settings.limit&&S.today.done){ show('s-alldone'); return; } start(t.dataset.act); }));
 }
 function pointerHold(el,ms,onDone,fillEl){ let t=null,start=0,raf=null; const stop=()=>{ clearTimeout(t); t=null; if(raf) cancelAnimationFrame(raf); if(fillEl) fillEl.style.height='0'; }; const tick=()=>{ if(!t) return; const p=Math.min(1,(Date.now()-start)/ms); if(fillEl) fillEl.style.height=(p*100)+'%'; raf=requestAnimationFrame(tick); }; el.addEventListener('pointerdown',e=>{ e.preventDefault(); start=Date.now(); t=setTimeout(()=>{ stop(); onDone(); },ms); tick(); }); ['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,stop)); }
 pointerHold($('gate'),3000,()=>openParent(),$('gate').querySelector('.fill'));
@@ -345,10 +345,10 @@ async function onTile(b){
 }
 function endRound(){
   leavePlay(); S.today.rounds++; save();
-  const over=S.today.rounds>=5||S.today.ms>=20*60*1000; if(over){ S.today.done=true; save(); }
+  const over=!!S.settings.limit&&(S.today.rounds>=5||S.today.ms>=20*60*1000); if(over){ S.today.done=true; save(); }
   $('end-title').textContent=over?'The kite flew all the way up.':'The kite flew high.'; $('end-text').textContent=over?'Reading time is finished for today.':''; $('btn-end-more').hidden=over; show('s-end');
 }
-$('btn-end-home').addEventListener('click',()=>{ renderHome(); show(S.today.done?'s-alldone':'s-home'); });
+$('btn-end-home').addEventListener('click',()=>{ renderHome(); show(S.settings.limit&&S.today.done?'s-alldone':'s-home'); });
 $('btn-end-more').addEventListener('click',()=>{ renderHome(); show('s-home'); });
 $('btn-alldone-home').addEventListener('click',()=>{ renderHome(); show('s-home'); });
 
@@ -363,7 +363,7 @@ function renderHow(){
   <div class="tipcard"><b>Build the word</b>A picture and empty boxes. The child taps letter tiles in order to spell the word; a wrong tile shakes and after two misses the right one pulses. Spelling from sounds is the strongest practice of the three, so lean on this one.</div>
   <div class="tipcard"><b>Levels</b>Easy is three-letter short-vowel words only. Medium adds silent e and r-controlled vowels and harder choices. Hard adds digraphs, blends, and longer words, with four choices.</div>
   <div class="tipcard"><b>What the voice does</b>After an answer the iPad says the word. It never says letter names, which get in the way of hearing sounds. Wrong answers show the word split into its parts with each lit in turn, then a pause.</div>
-  <div class="tipcard"><b>Keep it short</b>Rounds are 12 cards. The app stops after five rounds or twenty minutes. Missed words come back first in the next round. Read real picture books together every day; this app only covers decoding.</div>
+  <div class="tipcard"><b>Keep it short</b>Rounds are 12 cards. The daily limit is off by default; turn it on in Settings to stop play after five rounds or twenty minutes. Missed words come back first in the next round. Read real picture books together every day; this app only covers decoding.</div>
   </div>`;
 }
 function renderProgress(){
@@ -381,12 +381,14 @@ function renderSettings(){
   $('pane-settings').innerHTML=`<h2>Settings</h2>
   <div class="field"><label>Voice</label><select id="set-voice" style="font:inherit;font-size:16px;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);max-width:100%"><option value="">Automatic</option>${en.map(v=>`<option value="${v.name}" ${S.settings.voice===v.name?'selected':''}>${v.name} (${v.lang})</option>`).join('')}</select><button class="pbtn" id="set-test">Test: cat, hat, map</button></div>
   <div class="field"><label>Speed</label><input type="range" id="set-rate" min="0.6" max="1.1" step="0.05" value="${S.settings.rate}"><span class="note" id="set-rate-v">${S.settings.rate}</span></div>
-  <div class="field"><button class="pbtn" id="set-more">Allow one more round today</button><span class="note">${S.today.done?'Today is marked finished.':'Today is not finished.'}</span></div>
+  <div class="field"><label>Daily limit</label><button class="pbtn ${S.settings.limit?'on':''}" id="set-limit">${S.settings.limit?'On: five rounds or 20 minutes':'Off'}</button><span class="note">When on, play stops for the day after five rounds or twenty minutes.</span></div>
+  <div class="field"><button class="pbtn" id="set-more">Allow one more round today</button><span class="note">${S.settings.limit&&S.today.done?'Today is marked finished.':'Today is not finished.'}</span></div>
   <h3>On the iPad</h3><p>Open this page in Safari, tap Share, then "Add to Home Screen." Progress stays on the device.</p>
   <h3>Data</h3><div class="field"><button class="pbtn warn" id="set-reset">Hold to erase everything</button></div>`;
   $('set-voice').addEventListener('change',e=>{ S.settings.voice=e.target.value; save(); });
   $('set-test').addEventListener('click',async()=>{ await speak('cat'); await wait(300); await speak('hat'); await wait(300); await speak('map'); });
   $('set-rate').addEventListener('input',e=>{ S.settings.rate=+e.target.value; $('set-rate-v').textContent=S.settings.rate; save(); });
+  $('set-limit').addEventListener('click',()=>{ S.settings.limit=!S.settings.limit; if(!S.settings.limit) S.today.done=false; save(); renderSettings(); });
   $('set-more').addEventListener('click',()=>{ rollDay(); S.today.done=false; S.today.rounds=Math.min(S.today.rounds,4); S.today.ms=Math.min(S.today.ms,16*60*1000); save(); toast('One more round allowed.'); renderSettings(); });
   pointerHold($('set-reset'),3000,()=>{ localStorage.removeItem(KEY); S=JSON.parse(JSON.stringify(DEFAULT)); save(); toast('Erased.'); openParent(); });
 }
