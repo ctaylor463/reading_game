@@ -285,12 +285,20 @@ function distractors(w,n,hard){
 
 // ---------- Levels and pools ----------
 const LV_NAMES=['Easy','Medium','Hard'];
-function lvlStage(){ return [0,1,3][S.level||0]; }
-function pool(){ const lv=S.level||0; let p=PICS.filter(([w])=>stageOf(w)<=lvlStage()); if(lv===0) p=p.filter(([w])=>w.length===3&&stageOf(w)===0); if(lv===2){ const h=p.filter(([w])=>stageOf(w)>=1); if(h.length>=24) p=h; } return p; }
+// Easy: first sounds only. Medium: whole three-letter short-vowel words. Hard: everything else.
+function lvlStage(){ return [0,0,3][S.level||0]; }
+const DIG=/^(sh|ch|th|wh|ph|wr|kn|qu)/;
+const SOFT_WORDS=new Set(['gem','giraffe','cherry','cent','city','circle','gerbil','giant']);
+const VOWEL_OK=new Set(['ant','egg','apple','octopus','umbrella','elephant','otter','ambulance','anchor','axe','avocado']);
+const SAME_SOUND={c:['k','q'],k:['c','q'],g:['j'],j:['g'],s:['z','c'],z:['s']};
+function firstSoundOk(w){ return !DIG.test(w)&&!SOFT_WORDS.has(w)&&w[0]!=='x'&&(!VOW.includes(w[0])||VOWEL_OK.has(w)); }
+function pool(){ const lv=S.level||0; if(lv===0) return PICS.filter(([w])=>firstSoundOk(w)); let p=PICS.filter(([w])=>stageOf(w)<=lvlStage()); if(lv===1) p=p.filter(([w])=>w.length===3&&stageOf(w)===0); if(lv===2){ const h=p.filter(([w])=>stageOf(w)>=1); if(h.length>=24) p=h; } return p; }
+function letterChoices(w,n){ const f=w[0]; const avoid=new Set([f].concat(SAME_SOUND[f]||[])); const cands=(VOW.includes(f)?VOW:'bcdfghjklmnprstvwyz').split('').filter(c=>!avoid.has(c)); return shuffle([f,...shuffle(cands).slice(0,n-1)]); }
+function letterPictureChoices(it,n){ const f=it.w[0]; const avoid=new Set([f].concat(SAME_SOUND[f]||[])); const cands=shuffle(pool().filter(([w])=>!avoid.has(w[0]))); const seen=new Set(), out=[]; for(const [w,e] of cands){ if(seen.has(w[0])) continue; seen.add(w[0]); out.push({w,e}); if(out.length>=n-1) break; } return shuffle([{w:it.w,e:it.e},...out]); }
 function buildRound(n){ const p=pool(); const missed=p.filter(([w])=>(S.miss[w]||0)>0); const rest=p.filter(([w])=>!(S.miss[w]>0)); const out=shuffle(missed).slice(0,Math.min(4,missed.length)).concat(shuffle(rest)); return shuffle(out.slice(0,n)).map(([w,e])=>({w,e})); }
 function pictureChoices(it,n){
   const lv=S.level||0; const all=PICS.filter(([w])=>w!==it.w); let cands;
-  if(lv===0) cands=shuffle(all.filter(([w])=>w[0]!==it.w[0]));
+  if(lv<=1) cands=shuffle(all.filter(([w])=>w[0]!==it.w[0]));
   else { const same=shuffle(all.filter(([w])=>w[0]===it.w[0])); const rime=shuffle(all.filter(([w])=>w[0]!==it.w[0]&&w.slice(-2)===it.w.slice(-2))); cands=(lv===2?rime.concat(same):same.concat(rime)).concat(shuffle(all)); }
   const seen=new Set([it.w]); const out=[]; for(const c of cands){ if(seen.has(c[0])) continue; seen.add(c[0]); out.push({w:c[0],e:c[1]}); if(out.length>=n-1) break; }
   return shuffle([{w:it.w,e:it.e},...out]);
@@ -324,23 +332,31 @@ function start(act){ rollDay(); P.act=act; P.i=0; P.ok=0; P.busy=false; P.enter=
 function next(){
   if(P.i>=P.queue.length) return endRound();
   P.cur=P.queue[P.i]; P.tries=0; P.busy=false; P.pos=0; P.wrongHere=0; setKite(P.i/P.queue.length); const it=P.cur, lv=S.level||0;
-  if(P.act==='p2w'){ const opts=distractors(it.w, lv===2?4:3, lv>=1); $('stage').innerHTML=`<div class="card"><div class="pic">${it.e}</div></div><div class="choices">${opts.map(o=>`<button class="choice" data-w="${o}">${o}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); }
+  P.answer=it.w; P.need=it.w.length;
+  if(lv===0){
+    if(P.act==='p2w'){ P.answer=it.w[0]; const opts=letterChoices(it.w,3); $('stage').innerHTML=`<div class="card"><div class="pic">${it.e}</div></div><div class="choices">${opts.map(o=>`<button class="choice" data-w="${o}" style="font-size:min(16vw,84px);font-weight:700">${o}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===P.answer))); return; }
+    if(P.act==='w2p'){ const opts=letterPictureChoices(it,3); $('stage').innerHTML=`<div class="card"><div class="word" style="font-weight:700">${it.w[0]}</div></div><div class="choices">${opts.map(o=>`<button class="choice pic" data-w="${o.w}" aria-label="${o.w}">${o.e}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); return; }
+    if(P.act==='build'){ P.need=1; const letters=[...it.w]; const tiles=letterChoices(it.w,3); $('stage').innerHTML=`<div class="card" style="flex-direction:column;gap:18px"><div class="pic" style="font-size:min(20vw,110px)">${it.e}</div><div class="slots">${letters.map((l,i)=>i===0?'<div class="slot"></div>':`<div class="slot filled" style="border-color:var(--line);background:transparent">${l}</div>`).join('')}</div></div><div class="tiles-row">${tiles.map((t,i)=>`<button class="tile-l" data-i="${i}" data-l="${t}">${t}</button>`).join('')}</div>`; document.querySelectorAll('.tile-l').forEach(b=>b.addEventListener('click',()=>onTile(b))); return; }
+  }
+  if(P.act==='p2w'){ const opts=distractors(it.w, lv===2?4:3, lv>=2); $('stage').innerHTML=`<div class="card"><div class="pic">${it.e}</div></div><div class="choices">${opts.map(o=>`<button class="choice" data-w="${o}">${o}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); }
   if(P.act==='w2p'){ const opts=pictureChoices(it, lv===2?4:3); $('stage').innerHTML=`<div class="card">${wordHTML(it.w)}</div><div class="choices">${opts.map(o=>`<button class="choice pic" data-w="${o.w}" aria-label="${o.w}">${o.e}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); }
-  if(P.act==='build'){ const letters=[...it.w]; const tiles=shuffle(letters.concat(extraLetters(it.w, lv===0?2:3))); $('stage').innerHTML=`<div class="card" style="flex-direction:column;gap:18px"><div class="pic" style="font-size:min(20vw,110px)">${it.e}</div><div class="slots">${letters.map(()=>'<div class="slot"></div>').join('')}</div></div><div class="tiles-row">${tiles.map((t,i)=>`<button class="tile-l" data-i="${i}" data-l="${t}">${t}</button>`).join('')}</div>`; document.querySelectorAll('.tile-l').forEach(b=>b.addEventListener('click',()=>onTile(b))); }
+  if(P.act==='build'){ const letters=[...it.w]; const tiles=shuffle(letters.concat(extraLetters(it.w, lv===1?2:3))); $('stage').innerHTML=`<div class="card" style="flex-direction:column;gap:18px"><div class="pic" style="font-size:min(20vw,110px)">${it.e}</div><div class="slots">${letters.map(()=>'<div class="slot"></div>').join('')}</div></div><div class="tiles-row">${tiles.map((t,i)=>`<button class="tile-l" data-i="${i}" data-l="${t}">${t}</button>`).join('')}</div>`; document.querySelectorAll('.tile-l').forEach(b=>b.addEventListener('click',()=>onTile(b))); }
 }
 async function onChoice(b,right){
   if(P.busy) return; const it=P.cur; const s=currentSession(); const k=P.act; const card=$('stage').querySelector('.card');
   if(!right&&P.tries===0){ P.tries=1; s[k+'N']++; S.miss[it.w]=(S.miss[it.w]||0)+1; b.classList.add('dim'); card.classList.add('oops'); await wait(350); return; }
   P.busy=true; if(P.tries===0){ s[k+'N']++; s[k+'Ok']++; P.ok++; if(S.miss[it.w]>0) S.miss[it.w]--; }
-  const correct=document.querySelector(`.choice[data-w="${it.w}"]`); document.querySelectorAll('.choice').forEach(x=>x.classList.toggle('dim',x!==correct)); correct.classList.add('glow'); card.classList.remove('oops'); card.classList.add(right?'ok':'oops');
+  const key=(k==='p2w'&&(S.level||0)===0)?it.w[0]:it.w;
+  const correct=document.querySelector(`.choice[data-w="${key}"]`); document.querySelectorAll('.choice').forEach(x=>x.classList.toggle('dim',x!==correct)); correct.classList.add('glow'); card.classList.remove('oops'); card.classList.add(right?'ok':'oops');
   if(right){ await speak(it.w); await wait(600); }
+  else if((S.level||0)===0){ await wait(600); await speak(it.w); await wait(2000); }
   else { if(k==='p2w'){ correct.innerHTML=wordHTML(it.w).replace('class="word"','class="word" style="font-size:inherit"'); await wait(500); await showParts(correct); } else { await showParts(card); } await speak(it.w); await wait(2000); }
   P.i++; save(); next();
 }
 async function onTile(b){
   if(P.busy) return; const it=P.cur; const want=it.w[P.pos]; const slots=[...document.querySelectorAll('.slot')];
   if(b.dataset.l===want){ b.classList.add('used'); b.classList.remove('hint'); slots[P.pos].textContent=want; slots[P.pos].classList.add('filled'); P.pos++; P.wrongHere=0; document.querySelectorAll('.tile-l.hint').forEach(x=>x.classList.remove('hint'));
-    if(P.pos>=it.w.length){ P.busy=true; const s=currentSession(); s.buildN++; if(P.tries===0){ s.buildOk++; P.ok++; if(S.miss[it.w]>0) S.miss[it.w]--; } $('stage').querySelector('.card').classList.add('ok'); for(const sl of slots){ sl.classList.add('lit'); await wait(300); sl.classList.remove('lit'); } await speak(it.w); await wait(900); P.i++; save(); next(); } }
+    if(P.pos>=P.need){ P.busy=true; const s=currentSession(); s.buildN++; if(P.tries===0){ s.buildOk++; P.ok++; if(S.miss[it.w]>0) S.miss[it.w]--; } $('stage').querySelector('.card').classList.add('ok'); for(const sl of slots){ sl.classList.add('lit'); await wait(300); sl.classList.remove('lit'); } await speak(it.w); await wait(900); P.i++; save(); next(); } }
   else { P.tries++; P.wrongHere++; S.miss[it.w]=(S.miss[it.w]||0)+(P.wrongHere===1?1:0); b.classList.add('shake'); setTimeout(()=>b.classList.remove('shake'),400); if(P.wrongHere>=2){ const t=[...document.querySelectorAll('.tile-l')].find(x=>!x.classList.contains('used')&&x.dataset.l===want); if(t) t.classList.add('hint'); } }
 }
 function endRound(){
@@ -358,10 +374,11 @@ $('btn-parent-close').addEventListener('click',()=>{ renderHome(); show('s-home'
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t)); document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+t.dataset.pane)); }));
 function renderHow(){
   $('pane-how').innerHTML=`<h2>How to play</h2><div class="grid2">
-  <div class="tipcard"><b>Picture to word</b>A picture appears with three words (four at Hard) that differ by one letter, such as cat, cot, cut. The child reads the words and taps the one that matches. The single-letter difference means every letter has to be read, not just the first one.</div>
-  <div class="tipcard"><b>Word to picture</b>A word appears with three pictures. At Easy the pictures start with different letters. At Medium and Hard they share a first letter or an ending, so the child cannot pick from the first letter alone.</div>
-  <div class="tipcard"><b>Build the word</b>A picture and empty boxes. The child taps letter tiles in order to spell the word; a wrong tile shakes and after two misses the right one pulses. Spelling from sounds is the strongest practice of the three, so lean on this one.</div>
-  <div class="tipcard"><b>Levels</b>Easy is three-letter short-vowel words only. Medium adds silent e and r-controlled vowels and harder choices. Hard adds digraphs, blends, and longer words, with four choices.</div>
+  <div class="tipcard"><b>Easy is first sounds</b>At Easy the child only finds the sound a word starts with. Picture to word shows a picture and three letters: tap the letter it starts with. Word to picture shows one letter and three pictures: tap the picture that starts with it. Build the word shows the word with its first letter missing: tap the right tile. Words that start with sh, ch, th, wh, soft c or g, or a long vowel are left out so the first letter always says its usual sound.</div>
+  <div class="tipcard"><b>Picture to word (Medium and Hard)</b>A picture with three words (four at Hard) that differ by one letter, such as cat, cot, cut. The single-letter difference means every letter has to be read, not just the first one.</div>
+  <div class="tipcard"><b>Word to picture (Medium and Hard)</b>A word with three pictures. At Medium the pictures start with different letters. At Hard they share a first letter or an ending, so the child cannot pick from the first letter alone.</div>
+  <div class="tipcard"><b>Build the word (Medium and Hard)</b>A picture and empty boxes. The child taps letter tiles in order to spell the whole word; a wrong tile shakes and after two misses the right one pulses. Spelling from sounds is the strongest practice of the three.</div>
+  <div class="tipcard"><b>Levels</b>Easy is first sounds only. Medium is whole three-letter short-vowel words. Hard adds silent e, vowel teams, digraphs, blends, and longer words, with four choices.</div>
   <div class="tipcard"><b>What the voice does</b>After an answer the iPad says the word. It never says letter names, which get in the way of hearing sounds. Wrong answers show the word split into its parts with each lit in turn, then a pause.</div>
   <div class="tipcard"><b>Keep it short</b>Rounds are 12 cards. The daily limit is off by default; turn it on in Settings to stop play after five rounds or twenty minutes. Missed words come back first in the next round. Read real picture books together every day; this app only covers decoding.</div>
   </div>`;
