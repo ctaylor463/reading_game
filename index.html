@@ -59,7 +59,9 @@ button:focus-visible{outline:3px solid var(--name);outline-offset:3px}
 .lvl{flex:1;background:var(--card);border-radius:18px;box-shadow:var(--shadow);border:4px solid transparent;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:84px}
 .lvl.on{border-color:var(--accent)}
 .lvl .kites{display:flex;gap:2px}
-.lvl .kites svg{width:30px;height:30px}
+.lvl .kites svg{width:24px;height:24px}
+.choice.longword{font-size:min(6vw,40px)}
+.word.long{font-size:min(12vw,80px)}
 .lvl .lab{font-family:var(--f-ui);font-size:14px;color:var(--ink-soft)}
 .lvl.on .lab{color:var(--ink)}
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;flex:1;min-height:0}
@@ -257,7 +259,7 @@ function speak(text){ return new Promise(res=>{ if(!('speechSynthesis' in window
 // ---------- Word helpers ----------
 const TWO={sh:1,ch:1,th:1,wh:1,ng:1,ck:1,ar:1,or:1,er:1,ir:1,ur:1,ee:1,oo:1,ai:1,oa:1,ay:1,ea:1,ou:1,ow:1,ey:1,qu:1};
 function parseWord(w){ const u=[]; let m; if((m=w.match(/^([^aeiou]{1,3})([aeiou])([^aeiou])e$/))){ u.push(...parseWord(m[1])); u.push({t:m[2]}); u.push({t:m[3]}); u.push({t:'e',silent:true}); return u; } for(let i=0;i<w.length;){ const two=w.slice(i,i+2); if(TWO[two]){ u.push({t:two}); i+=2; } else { u.push({t:w[i]}); i++; } } return u; }
-function wordHTML(w){ return `<div class="word">${parseWord(w).map((x,i)=>`<span class="g ${x.silent?'silent':''}" data-i="${i}">${x.t}</span>`).join('')}</div>`; }
+function wordHTML(w){ return `<div class="word ${w.length>=7?'long':''}">${parseWord(w).map((x,i)=>`<span class="g ${x.silent?'silent':''}" data-i="${i}">${x.t}</span>`).join('')}</div>`; }
 async function showParts(container){ const word=container.querySelector('.word'); if(!word) return; const gs=[...word.querySelectorAll('.g')]; word.classList.add('split'); await wait(600); for(const g of gs){ if(g.classList.contains('silent')) continue; g.classList.add('lit'); await wait(380); g.classList.remove('lit'); } await wait(150); word.classList.remove('split'); await wait(500); }
 function stageOf(w){
   const groups=(w.match(/[aeiouy]+/g)||[]).length;
@@ -290,9 +292,9 @@ function distractors(w,n,hard){
 }
 
 // ---------- Levels and pools ----------
-const LV_NAMES=['Easy','Medium','Hard'];
-// Easy: first sounds only. Medium: whole three-letter short-vowel words. Hard: everything else.
-function lvlStage(){ return [0,0,3][S.level||0]; }
+const LV_NAMES=['Easy','Medium','Hard','Expert'];
+// Easy: first sounds only. Medium: whole three-letter short-vowel words. Hard: everything else. Expert: long words, five choices, real-word distractors.
+function lvlStage(){ return [0,0,3,3][S.level||0]; }
 const HARD_ONSET=/^(ph|wr|kn|qu)/;
 const SOFT_WORDS=new Set(['gem','giraffe','cherry','cent','city','circle','gerbil','giant']);
 const VOWEL_OK=new Set(['ant','egg','apple','octopus','umbrella','elephant','otter','ambulance','anchor','axe','avocado']);
@@ -300,7 +302,7 @@ const SAME_SOUND={c:['k','q'],k:['c','q'],g:['j'],j:['g'],s:['z','c'],z:['s']};
 // The first sound of a word: a three-letter cluster, a digraph, a two-letter blend, or a single letter.
 function onsetOf(w){ for(const o of ['str','spr','scr','spl','shr','thr']) if(w.startsWith(o)) return o; for(const d of ['sh','ch','th','wh']) if(w.startsWith(d)) return d; if(/^[bcdfgkpt][lr]/.test(w)||/^s[ckmnptwl]/.test(w)||/^tw/.test(w)) return w.slice(0,2); return w[0]; }
 function firstSoundOk(w){ return !HARD_ONSET.test(w)&&!SOFT_WORDS.has(w)&&w[0]!=='x'&&(!VOW.includes(w[0])||VOWEL_OK.has(w)); }
-function pool(){ const lv=S.level||0; if(lv===0) return PICS.filter(([w])=>firstSoundOk(w)); let p=PICS.filter(([w])=>stageOf(w)<=lvlStage()); if(lv===1) p=p.filter(([w])=>w.length===3&&stageOf(w)===0); if(lv===2){ const h=p.filter(([w])=>stageOf(w)>=1); if(h.length>=24) p=h; } return p; }
+function pool(){ const lv=S.level||0; if(lv===0) return PICS.filter(([w])=>firstSoundOk(w)); let p=PICS.filter(([w])=>stageOf(w)<=lvlStage()); if(lv===1) p=p.filter(([w])=>w.length===3&&stageOf(w)===0); if(lv===2){ const h=p.filter(([w])=>stageOf(w)>=1); if(h.length>=24) p=h; } if(lv===3){ const h=p.filter(([w])=>w.length>=5&&stageOf(w)>=2); if(h.length>=24) p=h; } return p; }
 const ONSET_POOL=[...new Set(PICS.filter(([w])=>firstSoundOk(w)).map(([w])=>onsetOf(w)))];
 function letterChoices(w,n){
   const o=onsetOf(w);
@@ -316,7 +318,7 @@ function buildRound(n){ const p=pool(); const missed=p.filter(([w])=>(S.miss[w]|
 function pictureChoices(it,n){
   const lv=S.level||0; const all=PICS.filter(([w])=>w!==it.w); let cands;
   if(lv<=1) cands=shuffle(all.filter(([w])=>w[0]!==it.w[0]));
-  else { const same=shuffle(all.filter(([w])=>w[0]===it.w[0])); const rime=shuffle(all.filter(([w])=>w[0]!==it.w[0]&&w.slice(-2)===it.w.slice(-2))); cands=(lv===2?rime.concat(same):same.concat(rime)).concat(shuffle(all)); }
+  else { const same2=shuffle(all.filter(([w])=>w.slice(0,2)===it.w.slice(0,2))); const same=shuffle(all.filter(([w])=>w[0]===it.w[0]&&w.slice(0,2)!==it.w.slice(0,2))); const rime=shuffle(all.filter(([w])=>w[0]!==it.w[0]&&w.slice(-2)===it.w.slice(-2))); cands=(lv===3?same2.concat(same,rime):rime.concat(same2,same)).concat(shuffle(all)); }
   const seen=new Set([it.w]); const out=[]; for(const c of cands){ if(seen.has(c[0])) continue; seen.add(c[0]); out.push({w:c[0],e:c[1]}); if(out.length>=n-1) break; }
   return shuffle([{w:it.w,e:it.e},...out]);
 }
@@ -330,7 +332,7 @@ const ACTS=[
 ];
 function renderHome(){
   rollDay(); const done=!!S.settings.limit&&S.today.done;
-  $('levels').innerHTML=[0,1,2].map(i=>`<button class="lvl ${(S.level||0)===i?'on':''}" data-lv="${i}" aria-label="${LV_NAMES[i]}"><span class="kites">${icon('kite').repeat(i+1)}</span><span class="lab">${LV_NAMES[i]}</span></button>`).join('');
+  $('levels').innerHTML=[0,1,2,3].map(i=>`<button class="lvl ${(S.level||0)===i?'on':''}" data-lv="${i}" aria-label="${LV_NAMES[i]}"><span class="kites">${icon('kite').repeat(i+1)}</span><span class="lab">${LV_NAMES[i]}</span></button>`).join('');
   document.querySelectorAll('.lvl').forEach(b=>b.addEventListener('click',()=>{ S.level=+b.dataset.lv; save(); renderHome(); }));
   $('tiles').innerHTML=ACTS.map(a=>`<button class="tile ${done?'locked':''}" data-act="${a.id}" aria-label="${a.label}"><span class="glyph">${a.glyph}</span><span class="label">${a.label}</span></button>`).join('');
   $('home-note').textContent=done?'Reading time is finished for today.':(S.today.rounds?`${S.today.rounds} round${S.today.rounds>1?'s':''} today`:'');
@@ -356,9 +358,10 @@ function next(){
     if(P.act==='w2p'){ const opts=letterPictureChoices(it,3); $('stage').innerHTML=`<div class="card"><div class="word" style="font-weight:700">${o}</div></div><div class="choices">${opts.map(x=>`<button class="choice pic" data-w="${x.w}" aria-label="${x.w}">${x.e}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); return; }
     if(P.act==='build'){ P.need=1; const rest=[...it.w.slice(o.length)]; const tiles=letterChoices(it.w,3); $('stage').innerHTML=`<div class="card" style="flex-direction:column;gap:18px"><div class="pic" style="font-size:min(20vw,110px)">${it.e}</div><div class="slots"><div class="slot wide"></div>${rest.map(l=>`<div class="slot rest">${l}</div>`).join('')}</div></div><div class="tiles-row">${tiles.map((t,i)=>`<button class="tile-l ${t.length>1?'wide':''}" data-i="${i}" data-l="${t}">${t}</button>`).join('')}</div>`; document.querySelectorAll('.tile-l').forEach(b=>b.addEventListener('click',()=>onTile(b))); return; }
   }
-  if(P.act==='p2w'){ const opts=distractors(it.w, lv===2?4:3, lv>=2); $('stage').innerHTML=`<div class="card"><div class="pic">${it.e}</div></div><div class="choices">${opts.map(o=>`<button class="choice" data-w="${o}">${o}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); }
-  if(P.act==='w2p'){ const opts=pictureChoices(it, lv===2?4:3); $('stage').innerHTML=`<div class="card">${wordHTML(it.w)}</div><div class="choices">${opts.map(o=>`<button class="choice pic" data-w="${o.w}" aria-label="${o.w}">${o.e}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); }
-  if(P.act==='build'){ const letters=[...it.w]; const tiles=shuffle(letters.concat(extraLetters(it.w, lv===1?2:3))); $('stage').innerHTML=`<div class="card" style="flex-direction:column;gap:18px"><div class="pic" style="font-size:min(20vw,110px)">${it.e}</div><div class="slots">${letters.map(()=>'<div class="slot"></div>').join('')}</div></div><div class="tiles-row">${tiles.map((t,i)=>`<button class="tile-l" data-i="${i}" data-l="${t}">${t}</button>`).join('')}</div>`; document.querySelectorAll('.tile-l').forEach(b=>b.addEventListener('click',()=>onTile(b))); }
+  const nOpt=lv===3?5:lv===2?4:3;
+  if(P.act==='p2w'){ const opts=distractors(it.w, nOpt, lv>=2); $('stage').innerHTML=`<div class="card"><div class="pic">${it.e}</div></div><div class="choices">${opts.map(o=>`<button class="choice ${o.length>=7?'longword':''}" data-w="${o}">${o}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); }
+  if(P.act==='w2p'){ const opts=pictureChoices(it, nOpt); $('stage').innerHTML=`<div class="card">${wordHTML(it.w)}</div><div class="choices">${opts.map(o=>`<button class="choice pic" data-w="${o.w}" aria-label="${o.w}">${o.e}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); }
+  if(P.act==='build'){ const letters=[...it.w]; const tiles=shuffle(letters.concat(extraLetters(it.w, lv===1?2:lv===3?4:3))); $('stage').innerHTML=`<div class="card" style="flex-direction:column;gap:18px"><div class="pic" style="font-size:min(20vw,110px)">${it.e}</div><div class="slots">${letters.map(()=>'<div class="slot"></div>').join('')}</div></div><div class="tiles-row">${tiles.map((t,i)=>`<button class="tile-l" data-i="${i}" data-l="${t}">${t}</button>`).join('')}</div>`; document.querySelectorAll('.tile-l').forEach(b=>b.addEventListener('click',()=>onTile(b))); }
 }
 async function onChoice(b,right){
   if(P.busy) return; const it=P.cur; const s=currentSession(); const k=P.act; const card=$('stage').querySelector('.card');
@@ -376,7 +379,7 @@ async function onTile(b){
   if(P.busy) return; const it=P.cur; const want=(S.level||0)===0?P.onset:it.w[P.pos]; const slots=[...document.querySelectorAll('.slot')];
   if(b.dataset.l===want){ b.classList.add('used'); b.classList.remove('hint'); slots[P.pos].textContent=want; slots[P.pos].classList.add('filled'); P.pos++; P.wrongHere=0; document.querySelectorAll('.tile-l.hint').forEach(x=>x.classList.remove('hint'));
     if(P.pos>=P.need){ P.busy=true; const s=currentSession(); s.buildN++; if(P.tries===0){ s.buildOk++; P.ok++; if(S.miss[it.w]>0) S.miss[it.w]--; } $('stage').querySelector('.card').classList.add('ok'); for(const sl of slots){ sl.classList.add('lit'); await wait(300); sl.classList.remove('lit'); } await speak(it.w); await wait(900); P.i++; save(); next(); } }
-  else { P.tries++; P.wrongHere++; S.miss[it.w]=(S.miss[it.w]||0)+(P.wrongHere===1?1:0); b.classList.add('shake'); setTimeout(()=>b.classList.remove('shake'),400); if(P.wrongHere>=2){ const t=[...document.querySelectorAll('.tile-l')].find(x=>!x.classList.contains('used')&&x.dataset.l===want); if(t) t.classList.add('hint'); } }
+  else { P.tries++; P.wrongHere++; S.miss[it.w]=(S.miss[it.w]||0)+(P.wrongHere===1?1:0); b.classList.add('shake'); setTimeout(()=>b.classList.remove('shake'),400); if(P.wrongHere>=((S.level||0)===3?3:2)){ const t=[...document.querySelectorAll('.tile-l')].find(x=>!x.classList.contains('used')&&x.dataset.l===want); if(t) t.classList.add('hint'); } }
 }
 function endRound(){
   leavePlay(); S.today.rounds++; save();
@@ -397,7 +400,7 @@ function renderHow(){
   <div class="tipcard"><b>Picture to word (Medium and Hard)</b>A picture with three words (four at Hard) that differ by one letter, such as cat, cot, cut. The single-letter difference means every letter has to be read, not just the first one.</div>
   <div class="tipcard"><b>Word to picture (Medium and Hard)</b>A word with three pictures. At Medium the pictures start with different letters. At Hard they share a first letter or an ending, so the child cannot pick from the first letter alone.</div>
   <div class="tipcard"><b>Build the word (Medium and Hard)</b>A picture and empty boxes. The child taps letter tiles in order to spell the whole word; a wrong tile shakes and after two misses the right one pulses. Spelling from sounds is the strongest practice of the three.</div>
-  <div class="tipcard"><b>Levels</b>Easy is first sounds only. Medium is whole three-letter short-vowel words. Hard adds silent e, vowel teams, digraphs, blends, and longer words, with four choices.</div>
+  <div class="tipcard"><b>Levels</b>Easy is first sounds only. Medium is whole three-letter short-vowel words. Hard adds silent e, vowel teams, digraphs, blends, and longer words, with four choices. Expert uses only longer words such as pumpkin and umbrella, offers five choices, makes every wrong word a real word, shows pictures that start with the same letters, and adds four spare tiles to Build the word with a later hint.</div>
   <div class="tipcard"><b>What the voice does</b>After an answer the iPad says the word. It never says letter names, which get in the way of hearing sounds. Wrong answers show the word split into its parts with each lit in turn, then a pause.</div>
   <div class="tipcard"><b>Keep it short</b>Rounds are 12 cards. The daily limit is off by default; turn it on in Settings to stop play after five rounds or twenty minutes. Missed words come back first in the next round. Read real picture books together every day; this app only covers decoding.</div>
   </div>`;
