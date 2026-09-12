@@ -66,8 +66,12 @@ button:focus-visible{outline:3px solid var(--name);outline-offset:3px}
 .word.long{font-size:min(12vw,80px)}
 .lvl .lab{font-family:var(--f-ui);font-size:14px;color:var(--ink-soft)}
 .lvl.on .lab{color:var(--ink)}
-.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;flex:1;min-height:0}
-@media (max-width:700px){.tiles{grid-template-columns:1fr}}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;flex:1;min-height:0}
+@media (max-width:900px){.tiles{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:480px){.tiles{grid-template-columns:1fr}}
+.choice.vowelopt{flex-direction:column;gap:2px;padding:10px 12px;min-height:130px}
+.choice.vowelopt .v{font-weight:700;font-size:min(12vw,64px);line-height:1}
+.choice.vowelopt .kw{font-size:min(7vw,36px);line-height:1}
 .tile{background:var(--card);border-radius:22px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;border:4px solid transparent;min-height:140px}
 .tile:active{transform:scale(.98)}
 .tile .glyph{font-size:64px;line-height:1;display:flex;align-items:center;gap:10px}
@@ -221,7 +225,7 @@ function load(){ try{ const raw=localStorage.getItem(KEY); if(raw){ const o=JSON
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
 function todayKey(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function rollDay(){ const k=todayKey(); if(S.todayKey!==k){ S.todayKey=k; S.today={rounds:0,ms:0,done:false}; save(); } }
-function currentSession(){ rollDay(); let s=S.sessions[S.sessions.length-1]; if(!s||s.date!==S.todayKey){ s={date:S.todayKey,p2wN:0,p2wOk:0,w2pN:0,w2pOk:0,buildN:0,buildOk:0,minutes:0,level:S.level||0}; S.sessions.push(s); } return s; }
+function currentSession(){ rollDay(); let s=S.sessions[S.sessions.length-1]; if(!s||s.date!==S.todayKey){ s={date:S.todayKey,p2wN:0,p2wOk:0,w2pN:0,w2pOk:0,buildN:0,buildOk:0,vowelN:0,vowelOk:0,minutes:0,level:S.level||0}; S.sessions.push(s); } return s; }
 
 // ---------- Utilities ----------
 const $=id=>document.getElementById(id);
@@ -316,8 +320,38 @@ function extraLetters(w,k){ const have=new Set(w); const vs=shuffle(VOW.split(''
 const ACTS=[
   {id:'p2w', label:'Picture to word', glyph:'<span>🐱</span><span class="arrow">&#8594;</span><span class="w">cat</span>'},
   {id:'w2p', label:'Word to picture', glyph:'<span class="w">hat</span><span class="arrow">&#8594;</span><span>🎩</span>'},
-  {id:'build', label:'Build the word', glyph:'<span>🗺️</span><span class="arrow">&#8594;</span><span class="w" style="letter-spacing:.25em">m a p</span>'}
+  {id:'build', label:'Build the word', glyph:'<span>🗺️</span><span class="arrow">&#8594;</span><span class="w" style="letter-spacing:.25em">m a p</span>'},
+  {id:'vowel', label:'Which vowel?', glyph:'<span>🐱</span><span class="arrow">&#8594;</span><span class="w">c<span style="color:var(--ink-soft);border-bottom:3px solid var(--accent)">&nbsp;&nbsp;</span>t</span>'}
 ];
+// ---------- Which vowel? ----------
+const VOWEL_KEY={a:'🍎',e:'🐘',i:'🦎',o:'🐙',u:'☂️'};
+const TEAMS=['ee','oo','oa','ai','ay','ea','ow','ou','oy','aw','ew'];
+function vowelSpot(w){ for(const t of TEAMS){ const i=w.indexOf(t); if(i>=0) return {i,len:2,v:t}; } const m=w.match(/[aeiou]/); return m?{i:m.index,len:1,v:m[0]}:null; }
+function vowelPool(){
+  const lv=S.level||0; const one=([w])=>/^[^aeiouy]+[aeiou][^aeiouy]+$/.test(w);
+  if(lv===0) return PICS.filter(p=>one(p)&&p[0].length===3);
+  if(lv===1) return PICS.filter(p=>one(p)&&p[0].length<=5);
+  if(lv===2){ const cvce=PICS.filter(([w])=>/^[^aeiouy]+[aeiou][^aeiouy]e$/.test(w)); const rest=PICS.filter(p=>one(p)&&p[0].length>=4&&p[0].length<=5); return cvce.concat(rest); }
+  return PICS.filter(([w])=>/^[^aeiouy]+(ee|oo|oa|ai|ay|ea|ow|ou|oy|aw|ew)[^aeiouy]*e?$/.test(w)&&w.length<=6);
+}
+function vowelChoices(spot){
+  const lv=S.level||0;
+  if(spot.len===2){ const others=shuffle(TEAMS.filter(t=>t!==spot.v)).slice(0,4); return shuffle([spot.v,...others]); }
+  if(lv===0){ const far={a:['i','o','u'],e:['a','o'],i:['a','o'],o:['a','i','u'],u:['a','i','o']}[spot.v]; return shuffle([spot.v,...shuffle(far).slice(0,2)]); }
+  return shuffle(['a','e','i','o','u']);
+}
+function vowelWordHTML(w,spot,fill){ const a=w.slice(0,spot.i), b=w.slice(spot.i+spot.len); return `<div class="word small"><span class="g">${a}</span><span class="g ${fill?'':'blank'}">${fill?fill:'&nbsp;'.repeat(spot.len)}</span><span class="g">${b}</span></div>`; }
+function sayMade(w){ if(/^[^aeiou][aeiou][bdfglmnptz]$/.test(w)) return w+w.slice(-1); if(/^[^aeiou][aeiou]k$/.test(w)) return w.slice(0,-1)+'ck'; return w; }
+async function onVowel(b){
+  if(P.busy) return; const it=P.cur, spot=P.spot, v=b.dataset.w, right=v===spot.v; const s=currentSession(); const card=$('stage').querySelector('.card');
+  const made=it.w.slice(0,spot.i)+v+it.w.slice(spot.i+spot.len);
+  if(!right&&P.tries===0){ P.tries=1; s.vowelN++; S.miss[it.w]=(S.miss[it.w]||0)+1; b.classList.add('dim'); card.classList.add('oops'); P.busy=true; card.querySelector('.word').outerHTML=vowelWordHTML(it.w,spot,`<span style="color:var(--amber)">${v}</span>`); await speak(sayMade(made)); await wait(700); card.querySelector('.word').outerHTML=vowelWordHTML(it.w,spot,null); card.classList.remove('oops'); P.busy=false; return; }
+  P.busy=true; if(P.tries===0){ s.vowelN++; s.vowelOk++; P.ok++; if(S.miss[it.w]>0) S.miss[it.w]--; }
+  const correct=document.querySelector(`.choice[data-w="${spot.v}"]`); document.querySelectorAll('.choice').forEach(x=>x.classList.toggle('dim',x!==correct)); correct.classList.add('glow'); card.classList.add(right?'ok':'oops');
+  card.querySelector('.word').outerHTML=vowelWordHTML(it.w,spot,spot.v);
+  if(right){ await speak(it.w); await wait(700); } else { await wait(500); await speak(it.w); await wait(2000); }
+  P.i++; save(); next();
+}
 function renderHome(){
   rollDay(); const done=!!S.settings.limit&&S.today.done;
   $('levels').innerHTML=[0,1,2,3].map(i=>`<button class="lvl ${(S.level||0)===i?'on':''}" data-lv="${i}" aria-label="${LV_NAMES[i]}"><span class="kites">${icon('kite').repeat(i+1)}</span><span class="lab">${LV_NAMES[i]}</span></button>`).join('');
@@ -335,11 +369,17 @@ const ROUND_N=12;
 function setKite(f){ $('kite').style.left=(4+92*Math.max(0,Math.min(1,f)))+'%'; }
 function leavePlay(){ if(P.enter){ const ms=Date.now()-P.enter; S.today.ms+=ms; const s=currentSession(); s.minutes=(s.minutes||0)+ms/60000; P.enter=0; } save(); }
 $('btn-home').addEventListener('click',()=>{ leavePlay(); renderHome(); show('s-home'); });
-function start(act){ rollDay(); P.act=act; P.i=0; P.ok=0; P.busy=false; P.enter=Date.now(); P.queue=buildRound(ROUND_N); show('s-play'); setKite(0); $('bar').innerHTML=''; next(); }
+function start(act){ rollDay(); P.act=act; P.i=0; P.ok=0; P.busy=false; P.enter=Date.now();
+  if(act==='vowel'){ const p=vowelPool(); const missed=p.filter(([w])=>(S.miss[w]||0)>0); const rest=p.filter(([w])=>!(S.miss[w]>0)); P.queue=shuffle(shuffle(missed).slice(0,4).concat(shuffle(rest)).slice(0,ROUND_N)).map(([w,e])=>({w,e})); }
+  else P.queue=buildRound(ROUND_N);
+  show('s-play'); setKite(0); $('bar').innerHTML=''; next(); }
 function next(){
   if(P.i>=P.queue.length) return endRound();
   P.cur=P.queue[P.i]; P.tries=0; P.busy=false; P.pos=0; P.wrongHere=0; setKite(P.i/P.queue.length); const it=P.cur, lv=S.level||0;
   P.answer=it.w; P.need=it.w.length;
+  if(P.act==='vowel'){ const spot=vowelSpot(it.w); P.spot=spot; const opts=vowelChoices(spot);
+    $('stage').innerHTML=`<div class="card" style="flex-direction:column;gap:10px"><div class="pic" style="font-size:min(22vw,120px)">${it.e}</div>${vowelWordHTML(it.w,spot,null)}</div><div class="choices">${opts.map(v=>`<button class="choice vowelopt" data-w="${v}"><span class="v">${v}</span>${VOWEL_KEY[v]?`<span class="kw">${VOWEL_KEY[v]}</span>`:''}</button>`).join('')}</div>`;
+    document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onVowel(b))); return; }
   if(lv===0){
     const o=onsetOf(it.w); P.onset=o;
     if(P.act==='p2w'){ P.answer=o; const opts=letterChoices(it.w,3); const rest=it.w.slice(o.length); const L=rest.length+Math.max(...opts.map(x=>x.length)); const fs=L<=5?'min(9vw,56px)':L<=8?'min(7vw,44px)':'min(5.2vw,34px)';
@@ -389,6 +429,7 @@ function renderHow(){
   <div class="tipcard"><b>Picture to word (Medium and Hard)</b>A picture with three words (four at Hard) that differ by one letter, such as cat, cot, cut. The single-letter difference means every letter has to be read, not just the first one.</div>
   <div class="tipcard"><b>Word to picture (Medium and Hard)</b>A word with three pictures. At Medium the pictures start with different letters. At Hard they share a first letter or an ending, so the child cannot pick from the first letter alone.</div>
   <div class="tipcard"><b>Build the word (Medium and Hard)</b>A picture and empty boxes. The child taps letter tiles in order to spell the whole word; a wrong tile shakes and after two misses the right one pulses. Spelling from sounds is the strongest practice of the three.</div>
+  <div class="tipcard"><b>Which vowel?</b>The middle sound is the hardest one for a young child to hear, so this game shows the picture and the word with only its vowel missing, c_t, and asks for the vowel. Each vowel tile carries its keyword picture: a apple, e elephant, i iguana, o octopus, u umbrella. Say those pairs together a few times so the pictures become anchors. A wrong tap makes the voice say the word that vowel would make, so tapping o for a cat plays "cot" and the difference is heard before the second try. Easy uses three-letter words and keeps the confusable vowels i, e, and u apart. Medium adds blends and all five vowels. Hard adds silent-e words. Expert asks for vowel teams such as oa, ee, and ai.</div>
   <div class="tipcard"><b>Levels</b>Easy is first sounds only. Medium is whole three-letter short-vowel words. Hard adds silent e, vowel teams, digraphs, blends, and longer words, with four choices. Expert uses only longer words such as pumpkin and umbrella, offers five choices, makes every wrong word a real word, shows pictures that start with the same letters, and adds four spare tiles to Build the word with a later hint.</div>
   <div class="tipcard"><b>What the voice does</b>After an answer the iPad says the word. It never says letter names, which get in the way of hearing sounds. Wrong answers show the word split into its parts with each lit in turn, then a pause.</div>
   <div class="tipcard"><b>Keep it short</b>Rounds are 12 cards. The daily limit is off by default; turn it on in Settings to stop play after five rounds or twenty minutes. Missed words come back first in the next round. Read real picture books together every day; this app only covers decoding.</div>
@@ -399,7 +440,7 @@ function renderProgress(){
   const pct=(o,n)=>n?Math.round(100*o/n)+'% of '+n:'-';
   const missed=Object.entries(S.miss).filter(([w,n])=>n>0).sort((a,b)=>b[1]-a[1]).slice(0,20);
   $('pane-progress').innerHTML=`<h2>Progress</h2><p>${mins} minute${mins===1?'':'s'} in the last seven days across ${week.length} day${week.length===1?'':'s'}.</p>
-  <h3>Sessions (first-try accuracy)</h3>${S.sessions.length?`<table><tr><th>Date</th><th>Picture to word</th><th>Word to picture</th><th>Build</th><th>Level</th></tr>${S.sessions.slice(-10).reverse().map(s=>`<tr><td>${s.date}</td><td>${pct(s.p2wOk,s.p2wN)}</td><td>${pct(s.w2pOk,s.w2pN)}</td><td>${pct(s.buildOk,s.buildN)}</td><td>${LV_NAMES[s.level||0]}</td></tr>`).join('')}</table>`:'<p class="note">No sessions yet.</p>'}
+  <h3>Sessions (first-try accuracy)</h3>${S.sessions.length?`<table><tr><th>Date</th><th>Picture to word</th><th>Word to picture</th><th>Build</th><th>Vowels</th><th>Level</th></tr>${S.sessions.slice(-10).reverse().map(s=>`<tr><td>${s.date}</td><td>${pct(s.p2wOk,s.p2wN)}</td><td>${pct(s.w2pOk,s.w2pN)}</td><td>${pct(s.buildOk,s.buildN)}</td><td>${pct(s.vowelOk||0,s.vowelN||0)}</td><td>${LV_NAMES[s.level||0]}</td></tr>`).join('')}</table>`:'<p class="note">No sessions yet.</p>'}
   <h3>Words still being missed</h3><p>${missed.length?missed.map(([w,n])=>`${w} (${n})`).join(', '):'<span class="note">None right now.</span>'}</p>
   <p><button class="pbtn" id="btn-export">Copy all data</button></p>`;
   $('btn-export').addEventListener('click',async()=>{ const txt=JSON.stringify(S,null,1); try{ await navigator.clipboard.writeText(txt); toast('Copied.'); }catch(e){ toast('Could not copy.'); } });
