@@ -61,6 +61,8 @@ button:focus-visible{outline:3px solid var(--name);outline-offset:3px}
 .lvl .kites{display:flex;gap:2px}
 .lvl .kites svg{width:24px;height:24px}
 .choice.longword{font-size:min(6vw,40px)}
+.choice.onsetopt{font-weight:700;padding:8px 10px;white-space:nowrap}
+.choice.onsetopt .rest{color:var(--ink-soft);opacity:.6;font-weight:400}
 .word.long{font-size:min(12vw,80px)}
 .lvl .lab{font-family:var(--f-ui);font-size:14px;color:var(--ink-soft)}
 .lvl.on .lab{color:var(--ink)}
@@ -340,7 +342,8 @@ function next(){
   P.answer=it.w; P.need=it.w.length;
   if(lv===0){
     const o=onsetOf(it.w); P.onset=o;
-    if(P.act==='p2w'){ P.answer=o; const opts=letterChoices(it.w,3); $('stage').innerHTML=`<div class="card" style="flex-direction:column;gap:10px"><div class="pic" style="font-size:min(22vw,120px)">${it.e}</div>${onsetHTML(it.w,false)}</div><div class="choices">${opts.map(x=>`<button class="choice" data-w="${x}" style="font-size:min(14vw,76px);font-weight:700">${x}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===P.answer))); return; }
+    if(P.act==='p2w'){ P.answer=o; const opts=letterChoices(it.w,3); const rest=it.w.slice(o.length); const L=rest.length+Math.max(...opts.map(x=>x.length)); const fs=L<=5?'min(9vw,56px)':L<=8?'min(7vw,44px)':'min(5.2vw,34px)';
+      $('stage').innerHTML=`<div class="card"><div class="pic">${it.e}</div></div><div class="choices">${opts.map(x=>`<button class="choice onsetopt" data-w="${x}" style="font-size:${fs}"><span class="on">${x}</span><span class="rest">${rest}</span></button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===P.answer))); return; }
     if(P.act==='w2p'){ const opts=letterPictureChoices(it,3); $('stage').innerHTML=`<div class="card"><div class="word" style="font-weight:700">${o}</div></div><div class="choices">${opts.map(x=>`<button class="choice pic" data-w="${x.w}" aria-label="${x.w}">${x.e}</button>`).join('')}</div>`; document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>onChoice(b,b.dataset.w===it.w))); return; }
     if(P.act==='build'){ P.need=1; const rest=[...it.w.slice(o.length)]; const tiles=letterChoices(it.w,3); const ss=slotStyle(rest.length+o.length); $('stage').innerHTML=`<div class="card" style="flex-direction:column;gap:18px"><div class="pic" style="font-size:min(20vw,110px)">${it.e}</div><div class="slots"><div class="slot wide" style="${ss.wide(o.length)}"></div>${rest.map(l=>`<div class="slot rest" style="${ss.one}">${l}</div>`).join('')}</div></div><div class="tiles-row">${tiles.map((t,i)=>`<button class="tile-l ${t.length>1?'wide':''}" data-i="${i}" data-l="${t}">${t}</button>`).join('')}</div>`; document.querySelectorAll('.tile-l').forEach(b=>b.addEventListener('click',()=>onTile(b))); return; }
   }
@@ -382,7 +385,7 @@ $('btn-parent-close').addEventListener('click',()=>{ renderHome(); show('s-home'
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t)); document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+t.dataset.pane)); }));
 function renderHow(){
   $('pane-how').innerHTML=`<h2>How to play</h2><div class="grid2">
-  <div class="tipcard"><b>Easy is first sounds</b>At Easy the child only finds the sound a word starts with. That sound can be one letter, a digraph such as sh, ch, th, or wh, or a blend such as st, fr, or bl. Picture to word shows the picture and the word with its first sound in black and the rest in grey, plus three choices: tap the one it starts with. Word to picture shows one sound and three pictures. Build the word shows the rest of the word in grey with the first sound missing: tap the right tile. Words starting with qu, ph, wr, kn, soft c or g, or a long vowel are left out so the letters always say their usual sounds.</div>
+  <div class="tipcard"><b>Easy is first sounds</b>At Easy the child only finds the sound a word starts with. That sound can be one letter, a digraph such as sh, ch, th, or wh, or a blend such as st, fr, or bl. Picture to word shows the picture and three versions of its name that differ only in the first sound, which is black while the rest is grey: tap the one that says the picture. Word to picture shows one sound and three pictures. Build the word shows the rest of the word in grey with the first sound missing: tap the right tile. Words starting with qu, ph, wr, kn, soft c or g, or a long vowel are left out so the letters always say their usual sounds.</div>
   <div class="tipcard"><b>Picture to word (Medium and Hard)</b>A picture with three words (four at Hard) that differ by one letter, such as cat, cot, cut. The single-letter difference means every letter has to be read, not just the first one.</div>
   <div class="tipcard"><b>Word to picture (Medium and Hard)</b>A word with three pictures. At Medium the pictures start with different letters. At Hard they share a first letter or an ending, so the child cannot pick from the first letter alone.</div>
   <div class="tipcard"><b>Build the word (Medium and Hard)</b>A picture and empty boxes. The child taps letter tiles in order to spell the whole word; a wrong tile shakes and after two misses the right one pulses. Spelling from sounds is the strongest practice of the three.</div>
